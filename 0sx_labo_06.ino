@@ -78,6 +78,12 @@ float lap = 2038;
 
 float max_step = (lap * max_angle) / 360;
 float min_step = (lap * min_angle) / 360;
+
+String tampon = "";
+
+unsigned long start_timer_matrix = 0;
+bool timer_started_matrix = false;
+const long timer_interval_matrix = 3000;
 #pragma endregion
 
 #pragma region states
@@ -298,55 +304,46 @@ void serial_event_default_msg(String tampon) {
 }
 
 void matrix_error(unsigned long ct) {
-  static unsigned long start_timer = 0;
-  static bool timer_started = false;
-  const long timer_interval = 3000;
-
   u8g2.drawCircle(3, 3, 3);
-  u8g2.drawLine(2, 2, 5, 5);  // pour signe interdit
+  u8g2.drawLine(4, 2, 2, 4);  // pour signe interdit
   u8g2.sendBuffer();
 
-  if (!timer_started) {  // demarre le timer si pas deja demarre
-    start_timer = ct;
-    timer_started = true;
-  } else if (ct - start_timer >= timer_interval) {  // change detat si le timer est supperieur a 3 secondes
-    timer_started = false;
+  if (!timer_started_matrix) {  // demarre le timer si pas deja demarre
+    start_timer_matrix = ct;
+    timer_started_matrix = true;
+  } else if (ct - start_timer_matrix >= timer_interval_matrix) {  // change detat si le timer est supperieur a 3 secondes
+    start_timer_matrix = 0;
+    timer_started_matrix = false;
     matrixAppState = EMPTY;
   }
 }
 
 void matrix_bad_command(unsigned long ct) {
-  static unsigned long start_timer = 0;
-  static bool timer_started = false;
-  const long timer_interval = 3000;
-
   u8g2.drawLine(1, 1, 6, 6);
   u8g2.drawLine(1, 6, 6, 1);  // pour X
   u8g2.sendBuffer();
 
-  if (!timer_started) {  // demarre le timer si pas deja demarre
-    start_timer = ct;
-    timer_started = true;
-  } else if (ct - start_timer >= timer_interval) {  // change detat si le timer est supperieur a 3 secondes
-    timer_started = false;
+  if (!timer_started_matrix) {  // demarre le timer si pas deja demarre
+    start_timer_matrix = ct;
+    timer_started_matrix = true;
+  } else if (ct - start_timer_matrix >= timer_interval_matrix) {  // change detat si le timer est supperieur a 3 secondes
+    start_timer_matrix = 0;
+    timer_started_matrix = false;
     matrixAppState = EMPTY;
   }
 }
 
 void matrix_checkmark(unsigned long ct) {
-  static unsigned long start_timer = 0;
-  static bool timer_started = false;
-  const long timer_interval = 3000;
-
   u8g2.drawLine(3, 1, 1, 3);
   u8g2.drawLine(1, 3, 5, 7);  // pour crochet
   u8g2.sendBuffer();
 
-  if (!timer_started) {  // demarre le timer si pas deja demarre
-    start_timer = ct;
-    timer_started = true;
-  } else if (ct - start_timer >= timer_interval) {  // change detat si le timer est supperieur a 3 secondes
-    timer_started = false;
+  if (!timer_started_matrix) {  // demarre le timer si pas deja demarre
+    start_timer_matrix = ct;
+    timer_started_matrix = true;
+  } else if (ct - start_timer_matrix >= timer_interval_matrix) {  // change detat si le timer est supperieur a 3 secondes
+    start_timer_matrix = 0;
+    timer_started_matrix = false;
     matrixAppState = EMPTY;
   }
 }
@@ -376,57 +373,62 @@ void parsing_command(const String& tampon, String& command, String& arg1, String
 }
 
 void serial_event_task(unsigned long ct) {
-  String tampon = Serial.readStringUntil('\n');
-  tampon.trim();
+  while (Serial.available()) {
+    char input_char = Serial.read();
+    if (input_char == '\n') {
+      tampon.trim();
 
-  if (tampon.length() == 0) return;
+      String command;
+      String arg1, arg2;
 
-  String command;
-  String arg1, arg2;
+      parsing_command(tampon, command, arg1, arg2);
 
-  parsing_command(tampon, command, arg1, arg2);
-
-  if (command == "g_dist") {
-    serial_event_default_msg(tampon);
-    Serial.println(distance);
-    matrixAppState = CHECKMARK;
-  } else if (command == "cfg" && arg1 == "alm") {
-    serial_event_default_msg(tampon);
-
-    int new_alert_distance = arg2.toInt();
-
-    if (new_alert_distance > 0 && new_alert_distance < min_distance) {
-      alert_distance = new_alert_distance;
-      Serial.print("Nouvelle distance de détection de l'alarme = ");
-      Serial.println(alert_distance);
-      matrixAppState = CHECKMARK;
-    } else {
-      Serial.println("🚫");
-      matrixAppState = ERROR;
-    }
-  } else if (command == "cfg" && (arg1 == "lim_inf" || arg1 == "lim_sup")) {
-    serial_event_default_msg(tampon);
-
-    int new_limit = arg2.toInt();
-
-    if (new_limit > 0) {
-      if (arg1 == "lim_inf" && new_limit < max_distance) {
-        min_distance = new_limit;
-        Serial.print("Nouvelle distance minimum du moteur pas-à-pas = ");
-        Serial.println(min_distance);
+      if (command == "g_dist") {
+        serial_event_default_msg(tampon);
+        Serial.println(distance);
         matrixAppState = CHECKMARK;
-      } else if (arg1 == "lim_sup" && new_limit > min_distance) {
-        max_distance = new_limit;
-        Serial.print("Nouvelle distance maximum du moteur pas-à-pas = ");
-        Serial.println(max_distance);
-        matrixAppState = CHECKMARK;
+      } else if (command == "cfg" && arg1 == "alm") {
+        serial_event_default_msg(tampon);
+
+        int new_alert_distance = arg2.toInt();
+
+        if (new_alert_distance > 0 && new_alert_distance < min_distance) {
+          alert_distance = new_alert_distance;
+          Serial.print("Nouvelle distance de détection de l'alarme = ");
+          Serial.println(alert_distance);
+          matrixAppState = CHECKMARK;
+        } else {
+          Serial.println("🚫");
+          matrixAppState = ERROR;
+        }
+      } else if (command == "cfg" && (arg1 == "lim_inf" || arg1 == "lim_sup")) {
+        serial_event_default_msg(tampon);
+
+        int new_limit = arg2.toInt();
+
+        if (new_limit > 0) {
+          if (arg1 == "lim_inf" && new_limit < max_distance) {
+            min_distance = new_limit;
+            Serial.print("Nouvelle distance minimum du moteur pas-à-pas = ");
+            Serial.println(min_distance);
+            matrixAppState = CHECKMARK;
+          } else if (arg1 == "lim_sup" && new_limit > min_distance) {
+            max_distance = new_limit;
+            Serial.print("Nouvelle distance maximum du moteur pas-à-pas = ");
+            Serial.println(max_distance);
+            matrixAppState = CHECKMARK;
+          } else {
+            Serial.println("🚫");
+            matrixAppState = ERROR;
+          }
+        }
       } else {
-        Serial.println("🚫");
-        matrixAppState = ERROR;
+        matrixAppState = BAD_COMMAND;
       }
+      tampon = "";
+    } else {
+      tampon += input_char;
     }
-  } else {
-    matrixAppState = BAD_COMMAND;
   }
 }
 #pragma endregion
