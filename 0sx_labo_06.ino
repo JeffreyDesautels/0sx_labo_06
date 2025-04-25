@@ -62,7 +62,7 @@ char lcdBuff[2][16] = {
 
 unsigned long current_time = 0;
 
-int frequency = 1000;
+int frequency = 1;
 
 int current_color = 0;
 
@@ -303,11 +303,7 @@ void serial_event_default_msg(String tampon) {
   Serial.print("PC : " + tampon + "\n" + "Arduino : ");
 }
 
-void matrix_error(unsigned long ct) {
-  u8g2.drawCircle(3, 3, 3);
-  u8g2.drawLine(4, 2, 2, 4);  // pour signe interdit
-  u8g2.sendBuffer();
-
+bool matrix_timer(unsigned long ct) {
   if (!timer_started_matrix) {  // demarre le timer si pas deja demarre
     start_timer_matrix = ct;
     timer_started_matrix = true;
@@ -315,37 +311,30 @@ void matrix_error(unsigned long ct) {
     start_timer_matrix = 0;
     timer_started_matrix = false;
     matrixAppState = EMPTY;
+    return true;
   }
+  return false;
+}
+
+void matrix_error(unsigned long ct) {
+  u8g2.drawCircle(3, 3, 3);
+  u8g2.drawLine(4, 2, 2, 4);  // pour signe interdit
+  u8g2.sendBuffer();
+  matrix_timer(ct);
 }
 
 void matrix_bad_command(unsigned long ct) {
   u8g2.drawLine(1, 1, 6, 6);
   u8g2.drawLine(1, 6, 6, 1);  // pour X
   u8g2.sendBuffer();
-
-  if (!timer_started_matrix) {  // demarre le timer si pas deja demarre
-    start_timer_matrix = ct;
-    timer_started_matrix = true;
-  } else if (ct - start_timer_matrix >= timer_interval_matrix) {  // change detat si le timer est supperieur a 3 secondes
-    start_timer_matrix = 0;
-    timer_started_matrix = false;
-    matrixAppState = EMPTY;
-  }
+  matrix_timer(ct);
 }
 
 void matrix_checkmark(unsigned long ct) {
   u8g2.drawLine(3, 1, 1, 3);
   u8g2.drawLine(1, 3, 5, 7);  // pour crochet
   u8g2.sendBuffer();
-
-  if (!timer_started_matrix) {  // demarre le timer si pas deja demarre
-    start_timer_matrix = ct;
-    timer_started_matrix = true;
-  } else if (ct - start_timer_matrix >= timer_interval_matrix) {  // change detat si le timer est supperieur a 3 secondes
-    start_timer_matrix = 0;
-    timer_started_matrix = false;
-    matrixAppState = EMPTY;
-  }
+  matrix_timer(ct);
 }
 
 void parsing_command(const String& tampon, String& command, String& arg1, String& arg2) {
@@ -423,6 +412,7 @@ void serial_event_task(unsigned long ct) {
           }
         }
       } else {
+        Serial.println("❌");
         matrixAppState = BAD_COMMAND;
       }
       tampon = "";
@@ -464,8 +454,8 @@ void loop() {
   current_time = millis();
 
   distance_task(current_time);
-  //stepper_state_manager();
-  // alert_state_manager(current_time);
+  stepper_state_manager();
+  alert_state_manager(current_time);
   print_task(current_time);
   matrix_state_manager(current_time);
   serial_event_task(current_time);
